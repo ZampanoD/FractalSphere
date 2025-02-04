@@ -33,6 +33,11 @@ var (
 type Point3D struct {
 	X, Y, Z float64
 }
+type TimeColors struct {
+	color1 color.RGBA
+	color2 color.RGBA
+	color3 color.RGBA
+}
 
 type Particle struct {
 	x, y     float64
@@ -163,15 +168,18 @@ func updateParticles() {
 }
 
 func (g *Game) drawParticles(screen *ebiten.Image) {
+	timeColors := getTimeColors()
+
 	for _, p := range particles {
 		alpha := uint8(255 * p.life / p.maxLife)
 
 		t := (math.Sin(float64(p.colorIdx)*0.1+float64(ebiten.CurrentTPS())/60) + 1) / 2
-		baseColor := lerpColor(
-			color.RGBA{65, 105, 225, 255},
-			color.RGBA{147, 112, 219, 255},
-			t,
-		)
+		var baseColor color.RGBA
+		if t < 0.5 {
+			baseColor = lerpColor(timeColors.color1, timeColors.color2, t*2)
+		} else {
+			baseColor = lerpColor(timeColors.color2, timeColors.color3, (t-0.5)*2)
+		}
 
 		col := color.RGBA{
 			R: uint8(float64(baseColor.R) * p.life / p.maxLife),
@@ -207,9 +215,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 func (g *Game) drawSphere(screen *ebiten.Image) {
 	subdivisions := getLOD(scale)
 	vertices, faces := getSphereData(subdivisions)
-
 	timeVal := float64(ebiten.CurrentTPS()) / 60
 	animatedVertices := animateVertices(vertices, timeVal)
+
+	timeColors := getTimeColors()
 
 	centerX, centerY := sphereX, sphereY
 	points := make([][]Vec2, len(faces))
@@ -236,7 +245,12 @@ func (g *Game) drawSphere(screen *ebiten.Image) {
 
 	for i, facePoints := range points {
 		t := (math.Sin(float64(i)*0.1+timeVal) + 1) / 2
-		col := lerpColor(color.RGBA{65, 105, 225, 255}, color.RGBA{147, 112, 219, 255}, t)
+		var col color.Color
+		if t < 0.5 {
+			col = lerpColor(timeColors.color1, timeColors.color2, t*2)
+		} else {
+			col = lerpColor(timeColors.color2, timeColors.color3, (t-0.5)*2)
+		}
 
 		DrawOptimizedTriangle(screen, facePoints, col)
 	}
@@ -451,5 +465,36 @@ func main() {
 	ebiten.SetWindowTitle("Fractal Sphere with Infinite Zoom")
 	if err := ebiten.RunGame(game); err != nil {
 		panic(err)
+	}
+}
+
+func getTimeColors() TimeColors {
+	hour := time.Now().Hour()
+
+	switch {
+	case hour >= 8 && hour < 12: //morning
+		return TimeColors{
+			color1: color.RGBA{255, 165, 0, 255},
+			color2: color.RGBA{255, 69, 0, 255},
+			color3: color.RGBA{255, 215, 0, 255},
+		}
+	case hour >= 12 && hour < 16: //lunch
+		return TimeColors{
+			color1: color.RGBA{176, 224, 230, 255},
+			color2: color.RGBA{240, 255, 255, 255},
+			color3: color.RGBA{173, 216, 230, 255},
+		}
+	case hour >= 16 && hour < 20: //evening
+		return TimeColors{
+			color1: color.RGBA{255, 140, 0, 255},
+			color2: color.RGBA{255, 99, 71, 255},
+			color3: color.RGBA{255, 165, 0, 255},
+		}
+	default:
+		return TimeColors{
+			color1: color.RGBA{65, 105, 225, 255},
+			color2: color.RGBA{147, 112, 219, 255},
+			color3: color.RGBA{0, 0, 139, 255},
+		}
 	}
 }
