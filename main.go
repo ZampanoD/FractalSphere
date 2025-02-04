@@ -22,8 +22,11 @@ var (
 	sphereY       float64 = 300
 	initialWidth          = 600
 	initialHeight         = 600
-
-	vertexCache sync.Map
+	lastMX        int     = 0
+	lastMY        int     = 0
+	lastWindowX   int     = 0
+	lastWindowY   int     = 0
+	vertexCache   sync.Map
 )
 
 type Point3D struct {
@@ -77,19 +80,33 @@ func (g *Game) Update() error {
 	}
 
 	mx, my := ebiten.CursorPosition()
+
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		if isCursorOverSphere(mx, my) {
 			isDragging = true
-			offsetX = float64(mx)
-			offsetY = float64(my)
-			windowX, windowY = ebiten.WindowPosition()
+			lastMX = mx
+			lastMY = my
+			lastWindowX, lastWindowY = ebiten.WindowPosition()
 		}
 	}
+
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && isDragging {
-		newX := windowX + int(float64(mx)-offsetX)
-		newY := windowY + int(float64(my)-offsetY)
-		ebiten.SetWindowPosition(newX, newY)
+		if mx != lastMX || my != lastMY {
+			deltaX := mx - lastMX
+			deltaY := my - lastMY
+
+			newX := lastWindowX + deltaX
+			newY := lastWindowY + deltaY
+
+			ebiten.SetWindowPosition(newX, newY)
+
+			lastMX = mx
+			lastMY = my
+			lastWindowX = newX
+			lastWindowY = newY
+		}
 	}
+
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		isDragging = false
 	}
