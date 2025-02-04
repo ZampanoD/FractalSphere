@@ -1,12 +1,13 @@
 package main
 
 import (
-	"image/color"
-	"math"
-	"sync"
-
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"image/color"
+	"math"
+	"math/rand"
+	"sync"
+	"time"
 )
 
 var (
@@ -32,6 +33,21 @@ var (
 type Point3D struct {
 	X, Y, Z float64
 }
+
+type Particle struct {
+	x, y     float64
+	speedX   float64
+	speedY   float64
+	life     float64
+	maxLife  float64
+	colorIdx int
+}
+
+var (
+	randomGen    = rand.New(rand.NewSource(time.Now().UnixNano()))
+	particles    []Particle
+	maxParticles = 100
+)
 
 type Face []int
 
@@ -110,14 +126,79 @@ func (g *Game) Update() error {
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		isDragging = false
 	}
+	updateParticles()
+	g.needsRedraw = true
 
 	return nil
+}
+
+func updateParticles() {
+	if len(particles) < maxParticles {
+		angle := randomGen.Float64() * 2 * math.Pi
+		radius := scale
+		x := sphereX + radius*math.Cos(angle)
+		y := sphereY - radius*math.Sin(angle)
+		particles = append(particles, Particle{
+			x:        x,
+			y:        y,
+			speedX:   (randomGen.Float64() - 0.5) * 2,
+			speedY:   -(randomGen.Float64()*2 + 1),
+			life:     1.0,
+			maxLife:  1.0 + randomGen.Float64()*0.5,
+			colorIdx: rand.Intn(20),
+		})
+	}
+
+	aliveParticles := []Particle{}
+	for _, p := range particles {
+		p.x += p.speedX
+		p.y += p.speedY
+		p.life -= 0.01
+
+		if p.life > 0 {
+			aliveParticles = append(aliveParticles, p)
+		}
+	}
+	particles = aliveParticles
+}
+
+func (g *Game) drawParticles(screen *ebiten.Image) {
+	for _, p := range particles {
+		alpha := uint8(255 * p.life / p.maxLife)
+
+		t := (math.Sin(float64(p.colorIdx)*0.1+float64(ebiten.CurrentTPS())/60) + 1) / 2
+		baseColor := lerpColor(
+			color.RGBA{65, 105, 225, 255},
+			color.RGBA{147, 112, 219, 255},
+			t,
+		)
+
+		col := color.RGBA{
+			R: uint8(float64(baseColor.R) * p.life / p.maxLife),
+			G: uint8(float64(baseColor.G) * p.life / p.maxLife),
+			B: uint8(float64(baseColor.B) * p.life / p.maxLife),
+			A: alpha,
+		}
+
+		radius := 2
+		for dy := -radius; dy <= radius; dy++ {
+			for dx := -radius; dx <= radius; dx++ {
+				if dx*dx+dy*dy <= radius*radius {
+					x, y := int(p.x)+dx, int(p.y)+dy
+					if x >= 0 && x < initialWidth && y >= 0 && y < initialHeight {
+						screen.Set(x, y, col)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	if g.needsRedraw {
 		g.offscreenImage.Clear()
 		g.drawSphere(g.offscreenImage)
+		g.drawParticles(g.offscreenImage)
 		g.needsRedraw = false
 	}
 	screen.DrawImage(g.offscreenImage, nil)
